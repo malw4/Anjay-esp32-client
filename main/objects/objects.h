@@ -68,3 +68,5 @@ void sensors_install(anjay_t *anjay);
 void sensors_update(anjay_t *anjay);
 void sensors_release(void);
 void sensors_read_data(void);
+const anjay_dm_object_def_t **water_meter_object_create(void);
+void water_meter_object_release(const anjay_dm_object_def_t **def);

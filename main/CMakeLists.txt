@@ -21,6 +21,7 @@ set(sources
      "objects/push_button.c"
      "objects/mpu6886.c"
      "objects/sensors.c"
+     "objects/watermeter.c"
      "st7789.c"
      "fontx.c"
      "lcd.c"

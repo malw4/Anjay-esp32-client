@@ -76,6 +76,7 @@ static char ENDPOINT_NAME[ANJAY_MAX_PK_OR_IDENTITY_SIZE];
 
 static const anjay_dm_object_def_t **DEVICE_OBJ;
 static const anjay_dm_object_def_t **PUSH_BUTTON_OBJ;
+static const anjay_dm_object_def_t **WATER_METER_OBJ;
 static const anjay_dm_object_def_t **LIGHT_CONTROL_OBJ;
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
 static const anjay_dm_object_def_t **WLAN_OBJ;
@@ -320,6 +321,10 @@ static void anjay_init(void) {
 
     if ((PUSH_BUTTON_OBJ = push_button_object_create())) {
         anjay_register_object(anjay, PUSH_BUTTON_OBJ);
+    }
+
+    if ((WATER_METER_OBJ = water_meter_object_create())) {
+        anjay_register_object(anjay, WATER_METER_OBJ);
     }
 
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
