@@ -18,6 +18,7 @@
 #include "objects/objects.h"
 #include "driver/gpio.h"
 #include "driver/timer.h"
+#include "bulbulator.h"
 
 #define TIMER_DIVIDER         (16)  //  Hardware timer clock divider
 #define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
@@ -266,6 +267,7 @@ static int resource_execute(anjay_t *anjay,
     case RID_CUMULATED_WATER_METER_VALUE_RESET:
         inst->cumulator_volume=0;
         inst->max_flow=0;
+        bulb_state = BULBULATOR_START;
         return 0; // TODO
 
     default:

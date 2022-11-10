@@ -3,10 +3,10 @@ config,namespace,
 wifi_ssid,data,string,TestAnjay
 wifi_pswd,data,string,oA24a5ziHX
 wifi_inter_en,data,u8,1
-endpoint_name,data,string,watermeter
-identity,data,string,watermeter
+endpoint_name,data,string,watermeter3
+identity,data,string,watermeter3
 psk,data,string,psk
-uri,data,string,coaps://eu.iot.avsystem.cloud:5684
+uri,data,string,coaps://lwm2m-test.avsystem.io:5684
 writable_wifi,namespace,,
 wifi_ssid,data,string,[wifi_ssid]
 wifi_pswd,data,string,[wifi_password]

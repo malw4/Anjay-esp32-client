@@ -47,6 +47,7 @@
 #include "firmware_update.h"
 #include "objects/objects.h"
 
+#include "bulbulator.h"
 
 #include "driver/rmt.h"
 #include "led_strip.h"
@@ -110,8 +111,15 @@ void led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t
     }
 }
 
+led_strip_t *strip;
+bulbulator_state_t bulb_state = BULBULATOR_IDLE;
 
-
+void set_strip_color(uint8_t r, uint8_t g, uint8_t b) {
+    for (int i = 0; i < CONFIG_EXAMPLE_STRIP_LED_NUMBER; i++) {
+        strip->set_pixel(strip, i, r, g, b);
+    }
+    strip->refresh(strip, 100);
+}
 static void led_task(void *pvParameters)
 {
     uint32_t red = 0;
@@ -129,7 +137,7 @@ static void led_task(void *pvParameters)
 
     // install ws2812 driver
     led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(CONFIG_EXAMPLE_STRIP_LED_NUMBER, (led_strip_dev_t)config.channel);
-    led_strip_t *strip = led_strip_new_rmt_ws2812(&strip_config);
+    strip = led_strip_new_rmt_ws2812(&strip_config);
     if (!strip) {
         ESP_LOGE(TAG, "install WS2812 driver failed");
     }
@@ -138,21 +146,48 @@ static void led_task(void *pvParameters)
     // Show simple rainbow chasing pattern
     ESP_LOGI(TAG, "LED Rainbow Chase Start");
     while (true) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
-                // Build RGB values
-                hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
-                led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
-                // Write RGB values to strip driver
-                ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
-            }
-            // Flush RGB values to LEDs
-            ESP_ERROR_CHECK(strip->refresh(strip, 100));
-            vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
-            // strip->clear(strip, 50);
-            // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+        switch (bulb_state) {
+            case BULBULATOR_IDLE:
+                for (int i = 0; i < 3; i++) {
+                    for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
+                        // Build RGB values
+                        hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
+                        led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
+                        // Write RGB values to strip driver
+                        ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
+                    }
+                    // Flush RGB values to LEDs
+                    ESP_ERROR_CHECK(strip->refresh(strip, 100));
+                    vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+                    // strip->clear(strip, 50);
+                    // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+                }
+                start_rgb += 60;
+                break;
+
+            case BULBULATOR_START:
+                set_strip_color(0xFF, 0, 0);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                set_strip_color(0xFF, 0xFF, 0);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                set_strip_color(0, 0xFF, 0);
+                bulb_state = BULBULATOR_MEASURE;
+                gpio_intr_enable(FLOW_PIN);
+                break;
+
+            case BULBULATOR_MEASURE:
+                vTaskDelay(pdMS_TO_TICKS(10000));
+                gpio_intr_disable(FLOW_PIN);
+                set_strip_color(0xFF, 0, 0);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                bulb_state = BULBULATOR_IDLE;
+                break;
+
+
+            default:
+                vTaskDelay(pdMS_TO_TICKS(100));
+                break;
         }
-        start_rgb += 60;
     }
 }
 
@@ -519,7 +554,7 @@ static int read_nvs_anjay_config(void) {
 
 static int read_anjay_config(void) {
     int err = 0;
-    avs_log(tutorial, INFO, "Opening Non-Volatile Storage (NVS) handle... ");
+    avs_log(tutorial, INFO, "Opening (NVS) read-only handle... ");
     if (read_nvs_anjay_config()) {
         avs_log(tutorial, WARNING,
                 "Reading from NVS has failed, attempt with Kconfig");
@@ -533,7 +568,14 @@ static int read_anjay_config(void) {
                  CONFIG_ANJAY_CLIENT_PSK_IDENTITY);
 #endif // CONFIG_ANJAY_SECURITY_MODE_PSK
         err = -1;
+    } else {
+        printf("Read Anjay setup from NVS:\n");
     }
+    printf("Endpoint:   %s\n", ENDPOINT_NAME);
+    printf("PSK:        %s\n", PSK);
+    printf("Identity:   %s\n", IDENTITY);
+    printf("Server Uri: %s\n", SERVER_URI);
+
     return err;
 }
 
@@ -569,7 +611,7 @@ static int read_wifi_config(void) {
     uint8_t writable_en = 0;
     int err = 0;
 
-    avs_log(tutorial, INFO, "Opening Non-Volatile Storage (NVS) handle... ");
+    avs_log(tutorial, INFO, "Opening (NVS) read-only handle... ");
     if (read_nvs_wifi_config(MAIN_NVS_CONFIG_NAMESPACE, &preconf_wifi_config,
                              &preconf_en)) {
         avs_log(tutorial, WARNING,
@@ -584,6 +626,10 @@ static int read_wifi_config(void) {
 
         err = -1;
     }
+    printf("Preconfigured WiFi:\n");
+    printf("SSID: %s\n", preconf_wifi_config.sta.ssid);
+    printf("Pass: %s\n", preconf_wifi_config.sta.password);
+    printf("Enabled: %d", preconf_en);
 
     avs_log(tutorial, INFO,
             "Opening Non-Volatile Storage (NVS) with wifi writable "
@@ -593,6 +639,12 @@ static int read_wifi_config(void) {
         avs_log(tutorial, WARNING, "Reading from NVS has failed");
 
         err = -1;
+    } else {
+
+        printf("Writable WiFi:\n");
+        printf("SSID: %s\n", writable_wifi_config.sta.ssid);
+        printf("Pass: %s\n", writable_wifi_config.sta.password);
+        printf("Enabled: %d", writable_en);
     }
 
     preconf_wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
