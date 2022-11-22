@@ -70,3 +70,5 @@ void sensors_release(void);
 void sensors_read_data(void);
 const anjay_dm_object_def_t **water_meter_object_create(void);
 void water_meter_object_release(const anjay_dm_object_def_t **def);
+const anjay_dm_object_def_t **led_color_light_object_create(void);
+void led_color_light_object_release(const anjay_dm_object_def_t ***out_def);

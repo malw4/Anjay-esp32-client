@@ -48,6 +48,7 @@
 #include "objects/objects.h"
 
 #include "bulbulator.h"
+#include "objects/led_color_light.h"
 
 #include "driver/rmt.h"
 #include "led_strip.h"
@@ -120,6 +121,17 @@ void set_strip_color(uint8_t r, uint8_t g, uint8_t b) {
     }
     strip->refresh(strip, 100);
 }
+
+static bool is_strip_white(void) {
+    for (size_t i = 0; i < RGB_COLOR_COUNT; i++) {
+        if (led_strip_state[i] != 255) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static void led_task(void *pvParameters)
 {
     uint32_t red = 0;
@@ -146,47 +158,27 @@ static void led_task(void *pvParameters)
     // Show simple rainbow chasing pattern
     ESP_LOGI(TAG, "LED Rainbow Chase Start");
     while (true) {
-        switch (bulb_state) {
-            case BULBULATOR_IDLE:
-                for (int i = 0; i < 3; i++) {
-                    for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
-                        // Build RGB values
-                        hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
-                        led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
-                        // Write RGB values to strip driver
-                        ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
-                    }
-                    // Flush RGB values to LEDs
-                    ESP_ERROR_CHECK(strip->refresh(strip, 100));
-                    vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
-                    // strip->clear(strip, 50);
-                    // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+        if (is_strip_white()) {
+            for (int i = 0; i < 3; i++) {
+                for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
+                    // Build RGB values
+                    hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
+                    led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
+                    // Write RGB values to strip driver
+                    ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
                 }
-                start_rgb += 60;
-                break;
-
-            case BULBULATOR_START:
-                set_strip_color(0xFF, 0, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                set_strip_color(0xFF, 0xFF, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                set_strip_color(0, 0xFF, 0);
-                bulb_state = BULBULATOR_MEASURE;
-                gpio_intr_enable(FLOW_PIN);
-                break;
-
-            case BULBULATOR_MEASURE:
-                vTaskDelay(pdMS_TO_TICKS(10000));
-                gpio_intr_disable(FLOW_PIN);
-                set_strip_color(0xFF, 0, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                bulb_state = BULBULATOR_IDLE;
-                break;
-
-
-            default:
-                vTaskDelay(pdMS_TO_TICKS(100));
-                break;
+                // Flush RGB values to LEDs
+                ESP_ERROR_CHECK(strip->refresh(strip, 100));
+                vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+                // strip->clear(strip, 50);
+                // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+            }
+            start_rgb += 60;
+        } else {
+            set_strip_color(led_strip_state[0],
+                            led_strip_state[1],
+                            led_strip_state[2]);
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
 }
@@ -225,6 +217,7 @@ static const anjay_dm_object_def_t **DEVICE_OBJ;
 static const anjay_dm_object_def_t **PUSH_BUTTON_OBJ;
 static const anjay_dm_object_def_t **WATER_METER_OBJ;
 static const anjay_dm_object_def_t **LIGHT_CONTROL_OBJ;
+static const anjay_dm_object_def_t **LED_COLOR_LIGHT_OBJ;
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
 static const anjay_dm_object_def_t **WLAN_OBJ;
 #endif // CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
@@ -472,6 +465,10 @@ static void anjay_init(void) {
 
     if ((WATER_METER_OBJ = water_meter_object_create())) {
         anjay_register_object(anjay, WATER_METER_OBJ);
+    }
+
+	if ((LED_COLOR_LIGHT_OBJ = led_color_light_object_create())) {
+        anjay_register_object(anjay, LED_COLOR_LIGHT_OBJ);
     }
 
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI

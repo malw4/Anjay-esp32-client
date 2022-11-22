@@ -22,6 +22,7 @@ set(sources
      "objects/mpu6886.c"
      "objects/sensors.c"
      "objects/watermeter.c"
+     "objects/led_color_light.c"
      "st7789.c"
      "fontx.c"
      "lcd.c"
