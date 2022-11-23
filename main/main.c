@@ -49,6 +49,7 @@
 
 #include "bulbulator.h"
 #include "objects/led_color_light.h"
+#include "driver/gpio.h"
 
 #include "driver/rmt.h"
 #include "led_strip.h"
@@ -218,6 +219,7 @@ static const anjay_dm_object_def_t **PUSH_BUTTON_OBJ;
 static const anjay_dm_object_def_t **WATER_METER_OBJ;
 static const anjay_dm_object_def_t **LIGHT_CONTROL_OBJ;
 static const anjay_dm_object_def_t **LED_COLOR_LIGHT_OBJ;
+static const anjay_dm_object_def_t **PUMP_BUTTON_OBJ;
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
 static const anjay_dm_object_def_t **WLAN_OBJ;
 #endif // CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
@@ -471,6 +473,10 @@ static void anjay_init(void) {
         anjay_register_object(anjay, LED_COLOR_LIGHT_OBJ);
     }
 
+    if ((PUMP_BUTTON_OBJ = digital_output_object_create())) {
+        anjay_register_object(anjay, PUMP_BUTTON_OBJ);
+    }
+
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
     if ((WLAN_OBJ = wlan_object_create())) {
         anjay_register_object(anjay, WLAN_OBJ);
@@ -707,6 +713,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     avs_log_set_handler(log_handler);
+
 
     avs_log_set_default_level(AVS_LOG_TRACE);
     anjay_init();

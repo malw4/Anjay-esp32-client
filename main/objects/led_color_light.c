@@ -124,7 +124,7 @@ static int resource_read(anjay_t *anjay, const anjay_dm_object_def_t *const *obj
 
 	default:
 		return ANJAY_ERR_METHOD_NOT_ALLOWED;
-	}
+		}
 }
 
 static int resource_write(anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr,
