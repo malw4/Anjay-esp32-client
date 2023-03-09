@@ -48,6 +48,8 @@
 #include "objects/objects.h"
 
 #include "bulbulator.h"
+#include "objects/led_color_light.h"
+#include "driver/gpio.h"
 
 #include "driver/rmt.h"
 #include "led_strip.h"
@@ -120,6 +122,17 @@ void set_strip_color(uint8_t r, uint8_t g, uint8_t b) {
     }
     strip->refresh(strip, 100);
 }
+
+static bool is_strip_white(void) {
+    for (size_t i = 0; i < RGB_COLOR_COUNT; i++) {
+        if (led_strip_state[i] != 255) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static void led_task(void *pvParameters)
 {
     uint32_t red = 0;
@@ -146,47 +159,27 @@ static void led_task(void *pvParameters)
     // Show simple rainbow chasing pattern
     ESP_LOGI(TAG, "LED Rainbow Chase Start");
     while (true) {
-        switch (bulb_state) {
-            case BULBULATOR_IDLE:
-                for (int i = 0; i < 3; i++) {
-                    for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
-                        // Build RGB values
-                        hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
-                        led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
-                        // Write RGB values to strip driver
-                        ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
-                    }
-                    // Flush RGB values to LEDs
-                    ESP_ERROR_CHECK(strip->refresh(strip, 100));
-                    vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
-                    // strip->clear(strip, 50);
-                    // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+        if (is_strip_white()) {
+            for (int i = 0; i < 3; i++) {
+                for (int j = i; j < CONFIG_EXAMPLE_STRIP_LED_NUMBER; j++) {
+                    // Build RGB values
+                    hue = j * 360 / CONFIG_EXAMPLE_STRIP_LED_NUMBER + start_rgb;
+                    led_strip_hsv2rgb(hue, 100, 100, &red, &green, &blue);
+                    // Write RGB values to strip driver
+                    ESP_ERROR_CHECK(strip->set_pixel(strip, j, red, green, blue));
                 }
-                start_rgb += 60;
-                break;
-
-            case BULBULATOR_START:
-                set_strip_color(0xFF, 0, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                set_strip_color(0xFF, 0xFF, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                set_strip_color(0, 0xFF, 0);
-                bulb_state = BULBULATOR_MEASURE;
-                gpio_intr_enable(FLOW_PIN);
-                break;
-
-            case BULBULATOR_MEASURE:
-                vTaskDelay(pdMS_TO_TICKS(10000));
-                gpio_intr_disable(FLOW_PIN);
-                set_strip_color(0xFF, 0, 0);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                bulb_state = BULBULATOR_IDLE;
-                break;
-
-
-            default:
-                vTaskDelay(pdMS_TO_TICKS(100));
-                break;
+                // Flush RGB values to LEDs
+                ESP_ERROR_CHECK(strip->refresh(strip, 100));
+                vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+                // strip->clear(strip, 50);
+                // vTaskDelay(pdMS_TO_TICKS(EXAMPLE_CHASE_SPEED_MS));
+            }
+            start_rgb += 60;
+        } else {
+            set_strip_color(led_strip_state[0],
+                            led_strip_state[1],
+                            led_strip_state[2]);
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
 }
@@ -225,6 +218,8 @@ static const anjay_dm_object_def_t **DEVICE_OBJ;
 static const anjay_dm_object_def_t **PUSH_BUTTON_OBJ;
 static const anjay_dm_object_def_t **WATER_METER_OBJ;
 static const anjay_dm_object_def_t **LIGHT_CONTROL_OBJ;
+static const anjay_dm_object_def_t **LED_COLOR_LIGHT_OBJ;
+static const anjay_dm_object_def_t **PUMP_BUTTON_OBJ;
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
 static const anjay_dm_object_def_t **WLAN_OBJ;
 #endif // CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
@@ -248,14 +243,14 @@ void schedule_change_config() {
 static int connect_to_instance(wifi_instance_t iid) {
     wifi_config_t wifi_config =
             wlan_object_get_instance_wifi_config(WLAN_OBJ, iid);
-    return connect_internal(&wifi_config);
+    return wifi_connect(&wifi_config);
 }
 
 // Reconfigure wifi due to enable resource value change
 static void change_config_job(avs_sched_t *sched, const void *args_ptr) {
     bool preconf_inst_enable = false, writable_inst_enable = false;
 
-    disconnect_internal();
+    wifi_disconnect();
     if (wlan_object_is_instance_enabled(WLAN_OBJ,
                                         ANJAY_WIFI_OBJ_WRITABLE_INSTANCE)) {
         avs_log(tutorial, INFO,
@@ -472,6 +467,14 @@ static void anjay_init(void) {
 
     if ((WATER_METER_OBJ = water_meter_object_create())) {
         anjay_register_object(anjay, WATER_METER_OBJ);
+    }
+
+	if ((LED_COLOR_LIGHT_OBJ = led_color_light_object_create())) {
+        anjay_register_object(anjay, LED_COLOR_LIGHT_OBJ);
+    }
+
+    if ((PUMP_BUTTON_OBJ = digital_output_object_create())) {
+        anjay_register_object(anjay, PUMP_BUTTON_OBJ);
     }
 
 #ifdef CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI
@@ -711,6 +714,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     avs_log_set_handler(log_handler);
 
+
     avs_log_set_default_level(AVS_LOG_TRACE);
     anjay_init();
 
@@ -730,15 +734,16 @@ void app_main(void) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 #elif defined(CONFIG_ANJAY_CLIENT_INTERFACE_ONBOARD_WIFI)
+    wifi_initialize();
     read_wifi_config();
 
     wifi_config_t wifi_config = { 0 };
     set_wifi_config(&wifi_config);
 
-    if (connect_internal(&wifi_config)) {
+    if (wifi_connect(&wifi_config)) {
         wifi_config = wlan_object_get_instance_wifi_config(
                 WLAN_OBJ, ANJAY_WIFI_OBJ_PRECONFIGURED_INSTANCE);
-        while (connect_internal(&wifi_config)) {
+        while (wifi_connect(&wifi_config)) {
             avs_log(tutorial, WARNING,
                     "Connection attempt to preconfigured wifi has failed, "
                     "reconnection in progress...");
