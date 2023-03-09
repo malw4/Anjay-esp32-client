@@ -94,8 +94,8 @@ static void digital_input_state_changed(void *_obj) {
 
     water_meter_instance_t *inst = find_instance(obj, 0);
     if (gpio_get_level(13)) {
-        inst->cumulator_volume+=(double)1.0/490000.0;
-        inst->temp_volume+=(double)1.0/490000.0;
+        inst->cumulator_volume+=(double)1.0/288000.0;
+        inst->temp_volume+=(double)1.0/288000.0;
     }
 }
 static int list_instances(anjay_t *anjay,
